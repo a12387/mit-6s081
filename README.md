@@ -1,1 +1,2 @@
-ECHO 处于打开状态。
+Default branch is empty.
+Please check out other branches
