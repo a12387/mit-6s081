@@ -76,14 +76,30 @@ sys_sleep(void)
 }
 
 
-#ifdef LAB_PGTBL
 int
 sys_pgaccess(void)
 {
-  // lab pgtbl: your code here.
-  return 0;
+    uint64 va;
+    int npage;
+    uint64 buf;
+    if(argaddr(0, &va) < 0) {
+        return -1;
+    }
+    if(argint(1, &npage) < 0) {
+        return -1;
+    }
+    if(argaddr(2, &buf) < 0) {
+        return -1;
+    }
+    if(npage > 32) {
+        printf("pgaccess: npage out of range\n");
+        return -1;
+    }
+    unsigned int bf = 0;
+    int ret = pgaccess(myproc()->pagetable, va, npage, &bf);
+    copyout(myproc()->pagetable, buf, (char *)&bf, sizeof(unsigned int));
+    return ret;
 }
-#endif
 
 uint64
 sys_kill(void)

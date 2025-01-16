@@ -455,3 +455,18 @@ vmprint(pagetable_t pagetable)
     }
     depth--;
 }
+int
+pgaccess(pagetable_t pgtbl,uint64 va, int npage, unsigned int *buf) {
+    
+    for(int i = 0; i < npage; i++) {
+        pte_t *pte;
+        if((pte = walk(pgtbl, va, 0)) == 0)
+            return -1;
+        if(*pte & PTE_A) {
+            *buf |= (1 << i);
+            *pte &= ~PTE_A;
+        }
+        va += PGSIZE;
+    }
+    return 0;
+}
