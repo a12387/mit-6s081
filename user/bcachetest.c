@@ -98,13 +98,13 @@ test0()
     dir[0] = '0' + i;
     mkdir(dir);
     if (chdir(dir) < 0) {
-      printf("chdir failed\n");
+      printf("chdir failed1\n");
       exit(1);
     }
     unlink(file);
     createfile(file, N);
     if (chdir("..") < 0) {
-      printf("chdir failed\n");
+      printf("chdir failed2\n");
       exit(1);
     }
   }
