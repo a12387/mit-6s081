@@ -91,7 +91,7 @@ bget(uint dev, uint blockno)
         release(&bcache.buckets[i].lock);
         continue;
     }
-    if(bb == 0 || bb->tick > b->tick) {
+    if(bb == 0 || bb->tick < b->tick) {
         bb = b;
         if(bucket_to_evict != -1)
             release(&bcache.buckets[bucket_to_evict].lock);
@@ -109,8 +109,18 @@ bget(uint dev, uint blockno)
   release(&bcache.buckets[bucket_to_evict].lock);
   acquire(&bcache.lock);
   acquire(&bcache.buckets[buck].lock);
+  for(b = bcache.buckets[buck].head.next; b != &bcache.buckets[buck].head; b = b->next){
+    if(b->dev == dev && b->blockno == blockno){
+      b->refcnt++;
+      release(&bcache.buckets[buck].lock);
+      acquiresleep(&b->lock);
+      return b;
+    }
+  }
   bb->next = bcache.buckets[buck].head.next;
   bb->prev = &bcache.buckets[buck].head;
+  bb->next->prev = bb;
+  bb->prev->next = bb;
   bb->dev = dev;
   bb->blockno = blockno;
   bb->valid = 0;
@@ -141,6 +151,7 @@ bwrite(struct buf *b)
 {
   if(!holdingsleep(&b->lock))
     panic("bwrite");
+//   printf("%d\n", b->blockno);
   virtio_disk_rw(b, 1);
 }
 
