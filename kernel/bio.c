@@ -112,7 +112,12 @@ bget(uint dev, uint blockno)
   for(b = bcache.buckets[buck].head.next; b != &bcache.buckets[buck].head; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
+      bb->prev = bcache.buckets[buck].head.prev;
+      bb->next = &bcache.buckets[buck].head;
+      bb->prev->next = bb;
+      bb->next->prev = bb;
       release(&bcache.buckets[buck].lock);
+      release(&bcache.lock);
       acquiresleep(&b->lock);
       return b;
     }
