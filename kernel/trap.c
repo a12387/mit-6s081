@@ -76,6 +76,7 @@ usertrap(void)
     else {
         memset((void *)ka, 0, PGSIZE);
         int i = 0;
+        char flag = 0;
         for(; i < 16; i++) {
             if((uint64)p->vmas[i].addr <= r_stval() && (uint64)p->vmas[i].addr + p->vmas[i].length > r_stval()) {
                 int perm = PTE_U;
@@ -93,8 +94,13 @@ usertrap(void)
                     uvmunmap(p->pagetable, r_stval(), 1, 1);
                     p->killed = 1;
                 }
+                flag = 1;
                 break;
             }
+        }
+        if(!flag) {
+            kfree((void*)ka);
+            p->killed = 1;
         }
     }
   } else {
