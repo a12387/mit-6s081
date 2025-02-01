@@ -5,7 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-
+#include "fcntl.h"
 struct spinlock tickslock;
 uint ticks;
 
@@ -67,6 +67,36 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if((r_scause() == 0xd || r_scause() == 0xf) && r_stval() <= p->sz) {
+    // page fault
+    uint64 ka = (uint64)kalloc();
+    if(ka == 0) {
+        p->killed = 1;
+    }
+    else {
+        memset((void *)ka, 0, PGSIZE);
+        int i = 0;
+        for(; i < 16; i++) {
+            if((uint64)p->vmas[i].addr <= r_stval() && (uint64)p->vmas[i].addr + p->vmas[i].length > r_stval()) {
+                int perm = PTE_U;
+                if(p->vmas[i].prot & PROT_READ) {
+                    perm |= PTE_R;
+                }
+                if(p->vmas[i].prot & PROT_WRITE) {
+                    perm |= PTE_W;
+                }
+                if(mappages(p->pagetable, r_stval(), PGSIZE, ka, perm) < 0) {
+                    kfree((void*)ka);
+                    p->killed = 1;
+                }
+                if(filereadat(p->vmas[i].f, r_stval(), PGSIZE, p->vmas[i].offset + r_stval() - (uint64)p->vmas[i].addr) <= 0) {
+                    uvmunmap(p->pagetable, r_stval(), 1, 1);
+                    p->killed = 1;
+                }
+                break;
+            }
+        }
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

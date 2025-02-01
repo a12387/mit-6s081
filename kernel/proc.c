@@ -5,7 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-
+#include "fcntl.h"
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -155,6 +155,16 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  for(int i = 0; i < 16; i++) {
+    if(p->vmas[i].addr) {
+        p->vmas[i].addr = 0;
+        p->vmas[i].f = 0;
+        p->vmas[i].flags = 0;
+        p->vmas[i].length = 0;
+        p->vmas[i].offset = 0;
+        p->vmas[i].prot = 0;
+    }
+  }
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -280,15 +290,29 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
-
-  // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+//   int l = 0;
+//   for(int i = 0; i < 16; i++) {
+//     l += p->vmas[i].length;
+//   }
+//   Copy user memory from parent to child.
+ if(uvmcopy(p->pagetable, np->pagetable, p->sz - 0) < 0){
     freeproc(np);
     release(&np->lock);
     return -1;
   }
+//   for(int i = 0; i < 16; i++){
+//     if(p->vmas[i].addr){
+//       np->vmas[i].f = p->vmas[i].f;
+//       np->vmas[i].length = p->vmas[i].length;
+//       np->vmas[i].prot = p->vmas[i].prot;
+//       np->vmas[i].flags = p->vmas[i].flags;
+//       np->vmas[i].offset = 0; // ret offset, becasue we maybe read before fork()
+//       np->vmas[i].addr = p->vmas[i].addr;
+//       filedup(p->vmas[i].f);
+//     }
+//   }
   np->sz = p->sz;
-
+  
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -343,7 +367,24 @@ exit(int status)
 
   if(p == initproc)
     panic("init exiting");
+//   for(int i = 0; i < 16; i++) {
+//     if(p->vmas[i].addr) {
+//         if(p->vmas[i].flags & MAP_SHARED) {
+//             filewriteat(p->vmas[i].f, (uint64)p->vmas[i].addr, p->vmas[i].length, p->vmas[i].offset);
+//         }
+//         uvmunmap(p->pagetable, (uint64)p->vmas[i].addr, p->vmas[i].length/PGSIZE, 1);
 
+//         p->sz -= p->vmas[i].length;
+//         p->vmas[i].addr = 0;
+//         p->vmas[i].length = 0;
+//         p->vmas[i].flags = 0;
+//         fileclose(p->vmas[i].f);
+//         p->vmas[i].f = 0;
+//         p->vmas[i].offset = 0;
+//         p->vmas[i].prot = 0;
+        
+//     }
+//   }
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){

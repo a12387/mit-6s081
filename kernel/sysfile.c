@@ -484,3 +484,77 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void) {
+  int fd, prot, flags;
+  uint64 length, offset;
+  uint64 addr;
+  struct proc *p = myproc();
+  struct file *f;
+  if(argaddr(0, &addr) < 0 || argaddr(1, &length) < 0 || argint(2, &prot) < 0 || argint(3, &flags) < 0 || argfd(4, &fd, &f) < 0 || argaddr(5, &offset) < 0) {
+    return -1;
+  }
+  if(addr != 0) {
+    return -1; // only NULL is allowed for address
+  }
+  uint64 sz = PGROUNDUP(p->sz);
+  p->sz += length;
+  if(f == 0 || ((prot & PROT_READ) && !f->readable) || ((prot & PROT_WRITE) && !f->writable && !(flags & MAP_PRIVATE))) {
+    p->sz -= length;
+    return -1;
+  }
+  filedup(f);
+  int n = 0;
+  for(; n < 16; n++) {
+    if(p->vmas[n].addr == 0) {
+        p->vmas[n].f = f;
+        p->vmas[n].addr = (void *)sz;
+        p->vmas[n].length = length;
+        p->vmas[n].prot = prot;
+        p->vmas[n].flags = flags;
+        p->vmas[n].offset = offset;
+        return sz;
+    }
+  }
+  p->sz -= length;
+  return -1;
+}
+
+uint64
+sys_munmap(void) {
+    uint64 addr, length;
+    if(argaddr(0, &addr) < 0 || argaddr(1, &length) < 0) {
+        return -1;
+    }
+    struct proc *p = myproc();
+    for(int i = 0; i < 16; i++) {
+        if((uint64)p->vmas[i].addr <= addr && (uint64)p->vmas[i].addr + p->vmas[i].length >= addr + length) {
+        // 3 cases: front, end, whole
+            if(p->vmas[i].flags & MAP_SHARED) {
+                filewriteat(p->vmas[i].f, addr, length, p->vmas[i].offset + addr - (uint64)p->vmas[i].addr);
+            }
+            uvmunmap(p->pagetable, addr, length/PGSIZE, 1);
+            if((uint64)p->vmas[i].addr == addr) {
+                p->vmas[i].addr += length;
+                p->vmas[i].length -= length;
+            } else if((uint64)p->vmas[i].addr + p->vmas[i].length == addr + length) {
+                p->vmas[i].length -= length;
+                p->sz -= length;
+            }
+
+            if(p->vmas[i].length == 0) {
+                p->vmas[i].addr = 0;
+                p->vmas[i].length = 0;
+                p->vmas[i].flags = 0;
+                fileclose(p->vmas[i].f);
+                p->vmas[i].f = 0;
+                p->vmas[i].offset = 0;
+                p->vmas[i].prot = 0;
+                p->sz -= length;
+            }
+            return 0;
+        }
+    }
+    return -1;
+}
